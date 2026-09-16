@@ -4,7 +4,8 @@ status: STABLE
 layer: BUSINESS
 priority: 3
 tags: flow,game,combat,turn,api
-dependents: []
+dependents:
+  - [[upsilonapi:api_websocket]]
 human_name: Tactical Game Turn API Flow
 type: USER_STORY
 version: 1.0
@@ -66,7 +67,7 @@ To detail the exact API interaction sequence required for a complete tactical tu
 - **Intent**: Verify match state has been updated and observe the result of the actions.
 
 ## TECHNICAL INTERFACE
-- **Related Specs:** `[[upsilonapi:api_battle_proxy]]`, `[[upsilonapi:api_laravel_gateway]]`
+- **Related Specs:** `[[upsilonapi:api_battle_proxy]]`, `[[upsilonapi:api_websocket]]`
 - **Code Tag:** `@spec-link [[us_api_flow_game_turn]]`
 
 ## EXPECTATION

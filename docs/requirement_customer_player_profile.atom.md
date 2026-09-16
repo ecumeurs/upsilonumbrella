@@ -10,6 +10,7 @@ parents: []
 version: 1.0
 dependents:
   - [[rule_progression]]
+  - [[upsilonapi:api_profile_credits]]
   - [[upsilonapi:rule_character_renaming]]
   - [[upsilontypes:entity_character]]
 ---
