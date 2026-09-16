@@ -91,6 +91,10 @@ Enforced by `scripts/code_health_check.py`; treat its errors as blocking.
   Postman, and the ATD atom in the same change. Observability and contracts docs likewise.
 - Commit/push only when asked; branch off the default branch first. Binaries go to `bin/` (git-
   ignored), never committed.
+- **New features and major updates start in a new git worktree**, not the checked-out working
+  copy. Isolates in-progress feature/refactor work from whatever else is live in the primary
+  checkout, and keeps the umbrella + submodule tree clean for concurrent work. Small fixes and
+  targeted bug patches don't need one — use judgment on "major."
 - Report outcomes faithfully — if a test fails or a step was skipped, say so with the evidence.
 
 ---
