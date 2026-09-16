@@ -15,7 +15,7 @@ services:
       - $HOME/.claude:/home/vscode/.claude
       - $HOME/.claude.json:/home/vscode/.claude.json:cached
     environment:
-      - DATABASE_URL=postgres://postgres:postgres@db:5432/postgres
+      - DATABASE_URL=postgres://postgres:postgres@db:5432/upsilon?sslmode=disable
       # Dev-topology internal URLs: all five app-level processes share this
       # container's network namespace, so they are localhost-based here (unlike
       # the CI compose, where each service is its own container on service-DNS).

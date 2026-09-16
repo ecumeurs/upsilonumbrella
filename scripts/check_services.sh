@@ -76,7 +76,7 @@ fi
 echo ""
 echo "--- Database Schema ---"
 
-BASE_DB_URL="${DATABASE_URL:-postgres://postgres:postgres@db:5432/postgres}"
+BASE_DB_URL="${DATABASE_URL:-postgres://postgres:postgres@db:5432/upsilon?sslmode=disable}"
 BASE_DB_URL="${BASE_DB_URL%%\?*}"
 DB_HOST=$(printf '%s' "$BASE_DB_URL" | sed -E 's#^[a-z]+://[^@]*@([^:/]+).*#\1#')
 DB_PORT=$(printf '%s' "$BASE_DB_URL" | sed -E 's#^[a-z]+://[^@]*@[^:/]+:?([0-9]*)/.*#\1#')
@@ -100,9 +100,21 @@ else
     }
 
     check_schema() {
-        local label=$1 url=$2 migrations_dir=$3
+        local label=$1 url=$2 migrations_dir=$3 expected_db=$4
         local db_name expected row version dirty
         db_name=$(printf '%s' "$url" | sed -E 's#.*/([^/?]+)(\?.*)?$#\1#')
+
+        # Crash-early guard (ISS-161): each service's DATABASE_URL path segment
+        # must match its expected per-service database. This used to be a
+        # purely descriptive read (the hub silently ran against "postgres"
+        # instead of "upsilon" for a long stretch); now it fails loudly instead
+        # of quietly reporting schema health for the wrong database.
+        if [ "$db_name" != "$expected_db" ]; then
+            echo "[ FAIL  ] $label: DATABASE_URL points at \"$db_name\", expected \"$expected_db\" — database mismatch"
+            STATUS_CODE=1
+            return
+        fi
+
         expected="$(expected_version_for "$migrations_dir")"
         [ -z "$expected" ] && expected=0
 
@@ -135,16 +147,15 @@ else
         fi
     }
 
-    # NOTE: unlike economy/auth, start_services.sh does NOT retarget the hub's
-    # DATABASE_URL to a dedicated "upsilon" database — the hub inherits the
-    # devcontainer's raw DATABASE_URL as-is, so its schema actually lands in
-    # whatever database that URL names (the shared "postgres" db by default
-    # in this dev topology). Check the URL the hub really uses, not the
-    # "upsilon" database deploy/initdb provisions for it (see ISS filed for
-    # this mismatch — the provisioned "upsilon" db is currently vestigial).
-    check_schema "Upsilon Hub" "${BASE_DB_URL}?sslmode=disable" "upsilonhub/db/migrations"
-    check_schema "Upsilon Auth" "$(db_url_for upsilonauth)" "upsilonauth/db/migrations"
-    check_schema "Upsilon Economy" "$(db_url_for upsiloneconomy)" "upsiloneconomy/db/migrations"
+    # Per-service database topology (ISS-161, resolved): the hub's own
+    # DATABASE_URL (declared in docker-compose.yaml) now targets the
+    # dedicated "upsilon" database deploy/initdb provisions for it, matching
+    # the sed-based retargeting start_services.sh already does for
+    # economy/auth. check_schema asserts each URL's path segment against its
+    # expected name below rather than just reporting whatever it finds.
+    check_schema "Upsilon Hub" "${BASE_DB_URL}?sslmode=disable" "upsilonhub/db/migrations" "upsilon"
+    check_schema "Upsilon Auth" "$(db_url_for upsilonauth)" "upsilonauth/db/migrations" "upsilonauth"
+    check_schema "Upsilon Economy" "$(db_url_for upsiloneconomy)" "upsiloneconomy/db/migrations" "upsiloneconomy"
 fi
 
 # ---------------------------------------------------------------------------

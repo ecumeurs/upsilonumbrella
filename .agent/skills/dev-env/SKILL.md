@@ -17,8 +17,10 @@ covers two gotchas that aren't obvious from the scripts alone (see
   auto-builds, auto-migrates, or auto-starts on `docker compose up`.
 - `db` (Postgres 18) is shared: `deploy/initdb` provisions one database per
   service — `upsilon`, `upsilonauth`, `upsiloneconomy` — on the same
-  instance. In practice the hub does **not** use `upsilon` (see Gotcha #5);
-  only auth/economy actually get retargeted to their dedicated database.
+  instance. The hub uses `upsilon` directly (declared in its
+  `DATABASE_URL` at compose level); economy/auth get retargeted to their own
+  database by `scripts/start_services.sh`'s `sed` rewrite (see **Database**
+  below; formerly Gotcha #5, now resolved — ISS-161).
 - `proxy` (Caddy) is the stable front door on `:8085`, routing
   `/api/v1/auth/*` and `/api/v1/admin/users*` to auth, `/api/v1/events` (SSE)
   and everything else to the hub.
@@ -88,19 +90,24 @@ docker system prune -af --volumes
 
 Each Go service binary is its own migration/seed tool (flags: `-migrate`,
 `-seed`; hub additionally has `-migrate-mode {full,baseline,river-only}` and
-`-seed-leaderboard`). All DB flags below run **inside the `app` container**
-and need `?sslmode=disable` appended to `DATABASE_URL` (see Gotchas).
+`-seed-leaderboard`). All DB flags below run **inside the `app` container**.
+The container's inherited `DATABASE_URL` (from `docker-compose.yaml`) now
+carries `?sslmode=disable` by default (ISS-161; formerly Gotcha #1, now
+retired) — a bare command using it as-is, or a value derived from it via
+`sed` (as `start_services.sh` does for economy/auth), automatically keeps
+that query string. Commands below that hand-type a different database's
+full URL still spell out `?sslmode=disable` explicitly, since Postgres
+itself doesn't have SSL enabled and a literal, non-derived URL doesn't
+inherit anything.
 
 ```bash
 # From the repo root on the host, everything below is wrapped as:
 docker compose exec -T app bash -lc '<command>'
 
-# --- Hub (uses the container's default DATABASE_URL db — "postgres" in
-#     this dev topology, NOT the "upsilon" db deploy/initdb provisions for
-#     it; see Gotcha #5) ---
+# --- Hub (uses the container's default DATABASE_URL db — "upsilon") ---
 cd /workspace/upsilonhub
-env DATABASE_URL="postgres://postgres:postgres@db:5432/postgres?sslmode=disable" ./bin/upsilonhub -migrate-mode full   # idempotent — safe to re-run
-env DATABASE_URL="postgres://postgres:postgres@db:5432/postgres?sslmode=disable" ./bin/upsilonhub -seed                # idempotent — skill-template catalog only
+./bin/upsilonhub -migrate-mode full   # idempotent — safe to re-run
+./bin/upsilonhub -seed                # idempotent — skill-template catalog only
 # accounts/shop catalog are NOT seeded here (moved to auth/economy, Phase 3-4)
 
 # --- Economy (db "upsiloneconomy") ---
@@ -168,20 +175,23 @@ docker compose exec -T app bash -lc 'cd /workspace && ./scripts/stop_services.sh
 - `start_services.sh` is authoritative: it stops any tracked stack first,
   then starts Engine → (migrate+seed economy) → Economy → (migrate+seed
   auth) → Auth → Hub → Vue frontend, verifying each is actually listening on
-  its port before moving on. **Needs `DATABASE_URL` with `?sslmode=disable`
-  exported/overridden** (see Gotchas) or the economy/auth provisioning step
-  fails.
+  its port before moving on. Works from the inherited container env alone —
+  no `DATABASE_URL` override needed on the command line (ISS-161; formerly
+  required per Gotcha #1, now retired).
 - `check_services.sh` runs three layers and exits non-zero if any fails:
   (1) `.services.pids` liveness — PID alive + port bound, `[RUNNING]` /
   `[PENDING]` / `[DOWN]`; (2) HTTP health — hits each service's own `/health`
   or `/up` route directly, plus the Caddy front door, catching a
   bound-but-wedged process or a Caddyfile/env routing break that port checks
-  miss; (3) database schema depth — for each service's actual database (per
-  Gotcha #5 for the hub), confirms `schema_migrations` exists, isn't left
-  `dirty` by an interrupted migrate, and its version matches the highest
-  migration file in that service's `db/migrations/` — catches exactly the
-  "process is up, DB was never migrated" gap in Gotcha #3 that a port/HTTP
-  check alone can't see.
+  miss; (3) database schema depth — for each service's expected database
+  (`upsilon`/`upsilonauth`/`upsiloneconomy`), asserts `DATABASE_URL`'s path
+  segment actually matches that name (failing loudly on drift instead of
+  silently checking the wrong database — this is what caught ISS-161) before
+  confirming `schema_migrations` exists, isn't left `dirty` by an
+  interrupted migrate, and its version matches the highest migration file in
+  that service's `db/migrations/` — catches exactly the "process is up, DB
+  was never migrated" gap in Gotcha #3 that a port/HTTP check alone can't
+  see.
 - `stop_services.sh` does a graceful PID-file kill, then a forceful
   `ss`-based port sweep (8090, 5173, 8081, 8092, 8091) as a backstop.
 - `scripts/zombie_killer.sh` is a harder hammer for hung `upsiloncli` /
@@ -235,16 +245,15 @@ npx playwright test                                          # all specs
 
 ## Gotchas
 
-1. **`DATABASE_URL` needs `?sslmode=disable`.** The `app` container's
-   inherited `DATABASE_URL` (from `docker-compose.yaml`) is
-   `postgres://postgres:postgres@db:5432/postgres` — no `sslmode`. Every Go
-   binary's `-migrate`/`-seed`/serve call fails with `pq: SSL is not enabled
-   on the server` unless `?sslmode=disable` is appended. `start_services.sh`
-   does **not** add this itself, so export/override it before calling the
-   script:
-   ```bash
-   docker compose exec -T -e DATABASE_URL="postgres://postgres:postgres@db:5432/postgres?sslmode=disable" app bash -lc 'cd /workspace && ./scripts/start_services.sh'
-   ```
+1. **RETIRED — `DATABASE_URL` needed `?sslmode=disable`.** Historical: the
+   `app` container's inherited `DATABASE_URL` (from `docker-compose.yaml`)
+   used to be `postgres://postgres:postgres@db:5432/postgres` — no
+   `sslmode` — so every Go binary's `-migrate`/`-seed`/serve call failed with
+   `pq: SSL is not enabled on the server` unless `?sslmode=disable` was
+   appended by hand, and `start_services.sh` didn't add it itself. Fixed at
+   compose level in ISS-161: the inherited `DATABASE_URL` now carries
+   `?sslmode=disable` by default, so `start_services.sh` (and any command
+   that inherits or `sed`-derives from it) works with no override needed.
 2. **Pre-existing (non-fresh) db volumes lack the per-service databases.**
    `deploy/initdb/create_databases.sql` only runs on first cluster init
    (fresh volume). On an older volume, `upsilon`/`upsilonauth`/`upsiloneconomy`
@@ -262,16 +271,19 @@ npx playwright test                                          # all specs
    ADMIN_INITIAL_PASSWORD not set. Admin seeding skipped.` — fine for
    ordinary dev, but set it explicitly if you need to log in as
    admin/dummy/admin2 locally.
-5. **The hub never actually uses the "upsilon" database.** `deploy/initdb`
-   provisions `upsilon`/`upsilonauth`/`upsiloneconomy`, and economy/auth *do*
-   get their `DATABASE_URL` rewritten to their own db by `start_services.sh`
-   (`ECONOMY_DB_URL`/`AUTH_DB_URL`, via a `sed` swap of the path segment) —
-   but the hub line never gets the same treatment, so it just inherits the
-   devcontainer's raw `DATABASE_URL`, whose path segment is `postgres`. The
-   hub's schema and data have always lived in the shared `postgres` database
-   in this dev topology; the dedicated `upsilon` database sits empty and
-   unused. Confirmed empirically 2026-09-16 (ISS filed). When
-   migrating/inspecting the hub's schema by hand, target whatever database
-   your `DATABASE_URL` actually names — don't assume it's `upsilon`.
-   `check_services.sh` already accounts for this (it reads the db name out
-   of the hub's real `DATABASE_URL` rather than hardcoding `upsilon`).
+5. **RESOLVED — the hub never actually used the "upsilon" database
+   (ISS-161).** Historical: `deploy/initdb` provisions
+   `upsilon`/`upsilonauth`/`upsiloneconomy`, and economy/auth *did* get their
+   `DATABASE_URL` rewritten to their own db by `start_services.sh`
+   (`ECONOMY_DB_URL`/`AUTH_DB_URL`, via a `sed` swap of the path segment),
+   but the hub line never got the same treatment — it just inherited the
+   devcontainer's raw `DATABASE_URL`, whose path segment was `postgres`. The
+   hub's schema and data lived in the shared `postgres` database while the
+   dedicated `upsilon` database sat empty and unused. Fixed 2026-09-16 by
+   pointing the hub's `DATABASE_URL` at `upsilon` directly in
+   `docker-compose.yaml` (root cause was narrower than a missing
+   `start_services.sh` rewrite — see the ISS-161 resolution note) and
+   re-migrating/seeding the hub into it. `check_services.sh` now asserts
+   each service's `DATABASE_URL` path segment against its expected database
+   name and fails loudly on a mismatch, rather than just reading whatever it
+   finds.
