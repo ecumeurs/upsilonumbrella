@@ -15,8 +15,10 @@ covers two gotchas that aren't obvious from the scripts alone (see
 - Everything Go/Node runs **inside the `app` container** (the devcontainer),
   not on the host. The container's own `CMD` is `sleep infinity` — nothing
   auto-builds, auto-migrates, or auto-starts on `docker compose up`.
-- `db` (Postgres 18) is shared: one database per service — `upsilon` (hub),
-  `upsilonauth`, `upsiloneconomy` — on the same instance.
+- `db` (Postgres 18) is shared: `deploy/initdb` provisions one database per
+  service — `upsilon`, `upsilonauth`, `upsiloneconomy` — on the same
+  instance. In practice the hub does **not** use `upsilon` (see Gotcha #5);
+  only auth/economy actually get retargeted to their dedicated database.
 - `proxy` (Caddy) is the stable front door on `:8085`, routing
   `/api/v1/auth/*` and `/api/v1/admin/users*` to auth, `/api/v1/events` (SSE)
   and everything else to the hub.
@@ -93,7 +95,9 @@ and need `?sslmode=disable` appended to `DATABASE_URL` (see Gotchas).
 # From the repo root on the host, everything below is wrapped as:
 docker compose exec -T app bash -lc '<command>'
 
-# --- Hub (db "upsilon", i.e. the container's default DATABASE_URL) ---
+# --- Hub (uses the container's default DATABASE_URL db — "postgres" in
+#     this dev topology, NOT the "upsilon" db deploy/initdb provisions for
+#     it; see Gotcha #5) ---
 cd /workspace/upsilonhub
 env DATABASE_URL="postgres://postgres:postgres@db:5432/postgres?sslmode=disable" ./bin/upsilonhub -migrate-mode full   # idempotent — safe to re-run
 env DATABASE_URL="postgres://postgres:postgres@db:5432/postgres?sslmode=disable" ./bin/upsilonhub -seed                # idempotent — skill-template catalog only
@@ -167,9 +171,17 @@ docker compose exec -T app bash -lc 'cd /workspace && ./scripts/stop_services.sh
   its port before moving on. **Needs `DATABASE_URL` with `?sslmode=disable`
   exported/overridden** (see Gotchas) or the economy/auth provisioning step
   fails.
-- `check_services.sh` reads `.services.pids` and confirms each PID is alive
-  and its port is bound — `[RUNNING]` / `[PENDING]` / `[DOWN]` per process,
-  non-zero exit if anything is down.
+- `check_services.sh` runs three layers and exits non-zero if any fails:
+  (1) `.services.pids` liveness — PID alive + port bound, `[RUNNING]` /
+  `[PENDING]` / `[DOWN]`; (2) HTTP health — hits each service's own `/health`
+  or `/up` route directly, plus the Caddy front door, catching a
+  bound-but-wedged process or a Caddyfile/env routing break that port checks
+  miss; (3) database schema depth — for each service's actual database (per
+  Gotcha #5 for the hub), confirms `schema_migrations` exists, isn't left
+  `dirty` by an interrupted migrate, and its version matches the highest
+  migration file in that service's `db/migrations/` — catches exactly the
+  "process is up, DB was never migrated" gap in Gotcha #3 that a port/HTTP
+  check alone can't see.
 - `stop_services.sh` does a graceful PID-file kill, then a forceful
   `ss`-based port sweep (8090, 5173, 8081, 8092, 8091) as a backstop.
 - `scripts/zombie_killer.sh` is a harder hammer for hung `upsiloncli` /
@@ -250,3 +262,16 @@ npx playwright test                                          # all specs
    ADMIN_INITIAL_PASSWORD not set. Admin seeding skipped.` — fine for
    ordinary dev, but set it explicitly if you need to log in as
    admin/dummy/admin2 locally.
+5. **The hub never actually uses the "upsilon" database.** `deploy/initdb`
+   provisions `upsilon`/`upsilonauth`/`upsiloneconomy`, and economy/auth *do*
+   get their `DATABASE_URL` rewritten to their own db by `start_services.sh`
+   (`ECONOMY_DB_URL`/`AUTH_DB_URL`, via a `sed` swap of the path segment) —
+   but the hub line never gets the same treatment, so it just inherits the
+   devcontainer's raw `DATABASE_URL`, whose path segment is `postgres`. The
+   hub's schema and data have always lived in the shared `postgres` database
+   in this dev topology; the dedicated `upsilon` database sits empty and
+   unused. Confirmed empirically 2026-09-16 (ISS filed). When
+   migrating/inspecting the hub's schema by hand, target whatever database
+   your `DATABASE_URL` actually names — don't assume it's `upsilon`.
+   `check_services.sh` already accounts for this (it reads the db name out
+   of the hub's real `DATABASE_URL` rather than hardcoding `upsilon`).
