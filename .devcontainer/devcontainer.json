@@ -1,5 +1,5 @@
 {
-    "name": "PHP Development",
+    "name": "Upsilon Hub Development",
     "dockerComposeFile": "../docker-compose.yaml",
     "service": "app",
     "workspaceFolder": "/workspace",
@@ -12,9 +12,8 @@
     "customizations": {
         "vscode": {
             "extensions": [
-                "xdebug.php-debug",
-                "bmewburn.vscode-intelephense-client",
-                "junstyle.php-cs-fixer",
+                "golang.go",
+                "vue.volar",
                 "vscode-icons-team.vscode-icons",
                 "yzhang.markdown-all-in-one"
             ]
