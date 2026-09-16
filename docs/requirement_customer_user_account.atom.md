@@ -8,8 +8,10 @@ priority: 3
 tags: [auth, identity, account]
 dependents:
   - [[upsilonapi:api_auth_user]]
+  - [[upsilonapi:api_profile_export]]
   - [[upsilonapi:rule_gdpr_compliance]]
   - [[upsilonapi:rule_password_policy]]
+  - [[upsilonauth:service_gdpr_export_orchestrator]]
   - [[upsilonbattleui:ui_modal_box]]
 type: REQUIREMENT
 layer: BUSINESS

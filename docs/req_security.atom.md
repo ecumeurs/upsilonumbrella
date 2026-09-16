@@ -13,7 +13,6 @@ dependents:
   - [[req_security_token_ttl]]
   - [[uc_auth_logout]]
   - [[upsilonapi:rule_admin_access_restriction]]
-  - [[upsilonapi:rule_gdpr_compliance]]
   - [[upsilonapi:rule_password_policy]]
 ---
 # Sanctum Token Security Requirement

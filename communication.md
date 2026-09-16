@@ -175,9 +175,29 @@ To ensure consistency and optimize performance during high-frequency combat, Ups
 - **Output:** Standard success envelope.
 
 #### `GET /auth/export`
-- **Specification:** [[api_profile_export]]
-- **Intent:** Provide complete user data dump for GDPR data portability.
-- **Output:** JSON file containing `account`, `characters`, and `meta`.
+- **Specification:** [[api_profile_export]], [[rule_gdpr_compliance]], [[upsilonauth:service_gdpr_export_orchestrator]]
+- **Intent:** Auth-owned, Auth-orchestrated GDPR data portability export. Aggregates
+  Auth's own account/registration/token data with the Economy fragment and, when the
+  caller is enrolled, the Tactical fragment.
+- **Authentication:** Requires authenticated user.
+- **Success (`200`):** Standard success envelope whose `data` is `authv1.GDPRExport`
+  (see `upsilontypes/authv1/gdpr_export.go`):
+  - `schema_version`: `string` (currently `"authv1.gdpr-export.v1"`)
+  - `generated_at`: `string (RFC3339 UTC)`
+  - `complete`: `bool` — always `true` on a `200`; there is no partial success.
+  - `included_fragments`: `Array<string>` — ordered `["auth","economy"]`, plus
+    `"tactical"` only when the caller is enrolled in tactical.
+  - `auth`: `{ account: {account_name, email, role, full_address, birth_date, created_at, updated_at, deleted_at}, registrations: [], tokens: [] }`
+    (no internal account UUID, no credentials, no token hashes/bearer values).
+  - `economy`: `{schema_version, wallet, inventory, credit_ledger, inventory_ledger}`.
+  - `tactical`: `battlev1.GDPRExportFragment` — **omitted entirely** (no key at all,
+    not a null placeholder) when the owner is not enrolled in tactical.
+  - Response carries `Content-Disposition: attachment; filename="upsilon_identity_export.json"`.
+- **Failure (fail-closed, `503`):** If any required fragment collection is incomplete,
+  the endpoint returns `503` with the standard error envelope (`data: null`, no
+  attachment header) and `meta`:
+  - `reason`: `"export_incomplete"`
+  - `missing_fragments`: `Array<{name: string, reason: string}>`
 
 #### `DELETE /auth/delete`
 - **Specification:** [[api_auth_user]]
@@ -507,16 +527,10 @@ decommissioned since the Phase 6 cutover.
 
 ### 2.9 Advanced Identity Management
 
-#### `GET /profile/export`
-- **Specification:** [[api_profile_export]]
-- **Intent:** Provide complete user data dump for GDPR data portability rights.
-- **Authentication:** Requires authenticated user.
-- **Output:**
-  - `user`: `UserResource` (including private fields)
-  - `characters`: `Array<CharacterResource>`
-  - `match_history`: `Array<MatchHistoryResource>`
-  - `exported_at`: `string` (ISO8601 timestamp)
-- **GDPR Reference:** Implements data portability requirement from [[rule_gdpr_compliance]].
+> GDPR data portability lives at `GET /auth/export` (§2.1) — Auth-owned and
+> Auth-orchestrated. There is no separate `/profile/export` route; the route
+> that historically lived here (Laravel-era `user`/`characters`/`match_history`/
+> `exported_at` shape) has been removed. See §2.1 for the current contract.
 
 #### `PUT /profile/personal-data`
 - **Specification:** (Planned - Not Yet Implemented)
@@ -803,7 +817,7 @@ Payload for the asynchronous engine callback.
 | `POST /matchmaking/join` | [[api_matchmaking]] | [[uc_matchmaking]] | 2.3 Matchmaking Ecosystem |
 | `POST /game/{id}/action` | [[api_battle_proxy]] | [[uc_combat_turn]] | 2.4 Combat Engine & Action Economy |
 | `POST /api/webhook/upsilon` | [[api_go_webhook_callback]] | [[uc_combat_turn]] / [[uc_match_resolution]] | Internal Callback |
-| `GET /api/profile/export` | [[api_profile_export]] | Data Portability | GDPR |
+| `GET /api/v1/auth/export` | [[api_profile_export]] / [[rule_gdpr_compliance]] / [[upsilonauth:service_gdpr_export_orchestrator]] | Data Portability | GDPR |
 | `POST /auth/logout` | [[api_auth_logout]] | [[uc_auth_logout]] | Security |
 | `GET /v1/arena/{id}/exists` | [[api_arena_existence_check]] | State Synchronization | Internal API |
 | `POST /v1/skills/generate` | [[api_skill_generation]] | Procedural Content | Internal API |
