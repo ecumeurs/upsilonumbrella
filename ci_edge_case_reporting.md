@@ -38,7 +38,7 @@ the edge of the requirement.
   - Postgres `postgres:18` via `docker compose up -d db` → host `:5433` (DB `postgres`, `sslmode=disable`).
   - DB reset + migrated (`hub -migrate-mode full`) + seeded (`hub -seed`, `ADMIN_INITIAL_PASSWORD=AdminPassword123!`).
   - Engine `upsilonapi` → `:8081`; Hub `upsilonhub` (`APP_DEBUG=true`) → `:8090`. `.services.pids` registered; `check_services.sh` green.
-  - SPA/Caddy not started (not needed — `--local` CLI hits the hub API directly).
+  - Caddy front door **required and running**: post-auth-extraction, `/api/v1/auth/*` is owned by `upsilonauth` and only Caddy routes both hub and auth traffic — the CLI targets it via `UPSILON_BASE_URL` (`http://proxy:8085` in compose), never the hub directly.
 - **Run policy:** agents use `scripts/trigger_one_ci_test.sh <name>`, time each run (<5s target), ≤10 executions, report a status on persistent failure.
 - Smoke test: `edge_auth_missing_token` PASSED in 0s.
 

@@ -112,7 +112,10 @@ The project includes a suite of scripts in the `scripts/` directory for local se
 ```
 > The hub does **not** auto-migrate on boot; `seed_ci.sh` is the one-shot that
 > applies the schema and seeds the catalog / test accounts. `trigger_one_ci_test.sh`
-> drives the CLI in `--local` mode, which targets the hub directly on `:8090`.
+> drives the CLI against the Caddy front door via `UPSILON_BASE_URL`
+> (`http://proxy:8085` in compose, `http://localhost:8085` from the host) —
+> the only entry point that routes both `/api/v1/auth/*` (to `upsilonauth`)
+> and the hub API.
 
 - **[scripts/start_services.sh](scripts/start_services.sh)**: Launches the full Upsilon stack (Upsilon Engine, Upsilon Hub, and Vite dev server) in the background. It automatically verifies that all ports are listening before exiting.
 - **[scripts/stop_services.sh](scripts/stop_services.sh)**: Gracefully stops all tracked services and ensures ports are freed.
@@ -183,6 +186,7 @@ All fundamental mechanics, structural constraints, entities, and network rules t
 | [upsilonapi default branch carries 15 Dependabot vulnerabilities (7 critical)](issues/Ref_20260722_upsilonapi_dependabot_vulns.md) | 2026-07-22 | Open | High | On pushing to `ecumeurs/upsilonapi` (2026-07-22, go.work-sync dependency comm... |
 | [Five match-resolution E2E scenarios race engine game-start and fail on dev machines](issues/Ref_20260722_match_start_race_local_env.md) | 2026-07-22 | Open | Low | The four scenarios act on a match immediately after the SSE `match.found` eve... |
 | [GDPR export loses per-game data coverage under the game-agnostic account model](issues/Ref_20260722_gdpr_export_per_game_gap.md) | 2026-07-22 | Open | Medium | Under the 2026-07-22 remodel, upsilonauth's `GET /auth/export` returns accoun... |
+| [Hub never retargets DATABASE_URL to the "upsilon" database deploy/initdb provisions for it](issues/ISS-161_20260916_hub_database_url_mismatch.md) | 2026-09-16 | Open | Medium | `deploy/initdb/create_databases.sql` provisions three per-service databases o... |
 | [Poison-only traps silently deal attack-scaled bonus damage because absent DamageScale defaults to 100](issues/ISS-160_20260902_poisontrap_damagescale_absent_bonus_damage.md) | 2026-09-02 | Open | Medium | `DamageScale` **defaults to 100 when the key is absent** — absence is not zer... |
 | [Nine test sites file a Cost property into the Targeting map under the key "TargetType" — passing only by accident of GetProperty's cross-map scan](issues/ISS-159_20260902_leech_tests_cost_filed_under_targeting.md) | 2026-09-02 | Open | Low | Nine sites do: |
 | [The battle client reads a targeting wire shape the engine never sends — `TargetType` silently falls back to 'Entity' and `Zone` is unreachable](issues/ISS-158_20260902_battleui_targeting_wire_shape_mismatch.md) | 2026-09-02 | Open | Medium | The frontend reads targeting properties as `{ value: ... }` for **all** kinds... |

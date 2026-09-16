@@ -112,10 +112,15 @@ services:
       # AccountPush producer (River job -> POST /internal/v1/players/:id/account)
       # needs the hub's internal S2S surface to relay account lifecycle mutations.
       - HUB_INTERNAL_URL=http://hub:8090
+      # GDPR export collector fans out to economy over S2S; without it the
+      # collector fail-closes (export returns 503) — same seam the hub uses.
+      - ECONOMY_INTERNAL_URL=http://economy:8092
       - S2S_TOKEN=ci-internal-token
     depends_on:
       auth-seed:
         condition: service_completed_successfully
+      economy:
+        condition: service_healthy
     healthcheck:
       # Distroless image (no shell): the binary probes its own /up route.
       test: [ "CMD", "/app/upsilonauth", "-healthcheck" ]

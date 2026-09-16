@@ -17,11 +17,13 @@ if ! ./scripts/check_services.sh; then
     exit 1
 fi
 
-# 2. Build CLI (ensure it exists)
+# 2. Build CLI (always rebuild: bin/ is git-ignored, a stale binary would
+#    silently test code that is not the working tree)
 CLI="./upsiloncli/bin/upsiloncli"
-if [ ! -f "$CLI" ]; then
-    echo "CLI binary not found. Building..."
-    cd upsiloncli && go build -o bin/upsiloncli cmd/upsiloncli/main.go && cd ..
+if ! CLI_BUILD_OUTPUT=$(cd upsiloncli && go build -o bin/upsiloncli cmd/upsiloncli/main.go 2>&1); then
+    echo "ERROR: Failed to build upsiloncli CLI:"
+    echo "$CLI_BUILD_OUTPUT"
+    exit 1
 fi
 
 # 3. Parameter handling
@@ -117,10 +119,11 @@ print_failure_reasons() {
     fi
 }
 
-# Run the farm with --local flag
+# Run the farm — the CLI inherits UPSILON_BASE_URL (the Caddy front door)
+# from the environment/compose; no flag needed.
 # No timeout here to allow debugging, but follow same structure as CI
 START_TIME=$SECONDS
-if "$CLI" --local --farm -L "$LOG_DIR" $PATHS ; then
+if "$CLI" --farm -L "$LOG_DIR" $PATHS ; then
     DURATION=$((SECONDS - START_TIME))
     if [ $DURATION -gt 10 ]; then
         echo -e "\033[32m[PASSED]\033[0m in ${DURATION}s \033[33m(WARNING: Slow test > 10s)\033[0m"

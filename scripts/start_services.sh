@@ -11,7 +11,11 @@ PORTS_VERIFY_TIMEOUT=10 # Max seconds to wait for a port
 # DEV_S2S_TOKEN is the shared internal-service secret both sides present/expect;
 # ECONOMY_DB_URL is the hub's DATABASE_URL retargeted at the upsiloneconomy
 # database (provisioned by deploy/initdb on a fresh dev volume).
-DEV_S2S_TOKEN="dev-internal-token"
+# DEV_S2S_TOKEN and the *_INTERNAL_URL values below inherit from the
+# environment (set at compose level in docker-compose.yaml for the dev
+# topology) with the current dev values as fallback defaults, so this script
+# still works standalone if someone runs it outside compose.
+DEV_S2S_TOKEN="${S2S_TOKEN:-dev-internal-token}"
 ECONOMY_DB_URL="$(printf '%s' "$DATABASE_URL" | sed -E 's#(://[^/]+/)[^/?]+#\1upsiloneconomy#')"
 
 # Phase-4 auth cutover: run the extracted upsilonauth alongside the hub — it
@@ -93,20 +97,22 @@ start_service "Upsilon Economy" "upsiloneconomy" "env DATABASE_URL=$ECONOMY_DB_U
 # 3. Upsilon Auth (Go) — before the hub so introspection is live at boot and
 # register/login work from the moment Caddy is up. Its database is a separate
 # schema; provision it (migrate + seed the well-known accounts) on every start.
-# HUB_INTERNAL_URL lets its AccountPush producer reach the hub's internal seam.
+# HUB_INTERNAL_URL lets its AccountPush producer reach the hub's internal seam;
+# ECONOMY_INTERNAL_URL lets its GDPR export collector fan out to the economy
+# service (without it, export fail-closes and composition serves placeholders).
 echo "[+] Provisioning auth database (migrate + seed)..."
 ( cd upsilonauth \
     && env DATABASE_URL="$AUTH_DB_URL" ./bin/upsilonauth -migrate \
     && env DATABASE_URL="$AUTH_DB_URL" ./bin/upsilonauth -seed ) \
     || { echo "[ERROR] auth migrate/seed failed (is the upsilonauth DB provisioned? 'docker compose down -v' to reprovision)"; exit 1; }
-start_service "Upsilon Auth" "upsilonauth" "env DATABASE_URL=$AUTH_DB_URL S2S_TOKEN=$DEV_S2S_TOKEN APP_DEBUG=true HUB_INTERNAL_URL=http://localhost:8090 ./bin/upsilonauth" "auth.log" 8091
+start_service "Upsilon Auth" "upsilonauth" "env DATABASE_URL=$AUTH_DB_URL S2S_TOKEN=$DEV_S2S_TOKEN APP_DEBUG=true HUB_INTERNAL_URL=${HUB_INTERNAL_URL:-http://localhost:8090} ECONOMY_INTERNAL_URL=${ECONOMY_INTERNAL_URL:-http://localhost:8092} ./bin/upsilonauth" "auth.log" 8091
 
 # 4. Upsilon Hub (API + SSE + SPA). DATABASE_URL comes from the devcontainer
 # env; APP_DEBUG=true is required for the '-- DEBUG MODE -- ' exception-prefix
 # parity the CLI edge suites assert. ECONOMY_INTERNAL_URL + S2S_TOKEN swap the
 # in-process economy for the extracted service (Phase 3); AUTH_INTERNAL_URL is
 # a hard cutover (Phase 4, no rollback flag) — the hub always introspects auth.
-start_service "Upsilon Hub" "upsilonhub" "env APP_DEBUG=true UPSILON_API_URL=http://localhost:8081 HUB_SPA_DIR=/workspace/upsilonbattleui/dist ECONOMY_INTERNAL_URL=http://localhost:8092 AUTH_INTERNAL_URL=http://localhost:8091 S2S_TOKEN=$DEV_S2S_TOKEN ./bin/upsilonhub" "hub.log" 8090
+start_service "Upsilon Hub" "upsilonhub" "env APP_DEBUG=true UPSILON_API_URL=${UPSILON_API_URL:-http://localhost:8081} HUB_SPA_DIR=/workspace/upsilonbattleui/dist ECONOMY_INTERNAL_URL=${ECONOMY_INTERNAL_URL:-http://localhost:8092} AUTH_INTERNAL_URL=${AUTH_INTERNAL_URL:-http://localhost:8091} S2S_TOKEN=$DEV_S2S_TOKEN ./bin/upsilonhub" "hub.log" 8090
 
 # 5. Vue Frontend (Vite dev server, proxies /api + /up to the :8085 front door)
 start_service "Vue Frontend" "upsilonbattleui" "npm run dev" "vite.log" 5173

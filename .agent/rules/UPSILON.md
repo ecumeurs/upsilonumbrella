@@ -114,7 +114,7 @@ The hub is where the v3 platform is assembled by composition. Its packages:
 - `scripts/repo_status.sh [--fetch]`: one-shot health check of the umbrella **and every submodule** — branch, HEAD, push-sync (ahead/behind), submodule-pointer coherence, and working-tree cleanliness in one aligned table. Exits non-zero if anything is dirty / unpushed / drifted, so it works as a pre- and post-push preflight. Run it before bumping submodule pointers and after pushing to confirm a coherent snapshot.
 
 ### Manual Verification
-- `upsiloncli --local --farm`: starts a local match with automated bot players.
+- `upsiloncli --farm`: starts a local match with automated bot players; targets the Caddy front door via `UPSILON_BASE_URL` (set at compose level to `http://proxy:8085` for the dev container, `http://localhost:8085` from the host — the only entry point routing both `/api/v1/auth/*` and the hub API).
 - `scripts/upsilon_log_parser.sh`: parses and colorizes engine logs for debugging.
 
 ## 6. Environments

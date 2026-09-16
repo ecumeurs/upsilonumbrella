@@ -131,7 +131,10 @@ class MatchManager:
         log_file = os.path.join(LOG_DIR, f"{match_id}.log")
         
         # Build command
-        cmd = [CLI_BIN, "--local", "--farm", "--timeout", "600"]
+        # UPSILON_BASE_URL is inherited from the environment (set at compose
+        # level to the Caddy front door); the CLI's --local flag was removed
+        # post-auth-extraction since no scenario can run hub-direct anymore.
+        cmd = [CLI_BIN, "--farm", "--timeout", "600"]
         for _ in range(num_bots):
             cmd.append(BOT_SCRIPT)
         

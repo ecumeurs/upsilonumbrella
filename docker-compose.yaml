@@ -16,6 +16,22 @@ services:
       - $HOME/.claude.json:/home/vscode/.claude.json:cached
     environment:
       - DATABASE_URL=postgres://postgres:postgres@db:5432/postgres
+      # Dev-topology internal URLs: all five app-level processes share this
+      # container's network namespace, so they are localhost-based here (unlike
+      # the CI compose, where each service is its own container on service-DNS).
+      # Declared once at compose level so every process (including a manual/
+      # ad-hoc run outside start_services.sh) inherits the same wiring — see
+      # scripts/start_services.sh, which falls back to these same values.
+      - ECONOMY_INTERNAL_URL=http://localhost:8092
+      - HUB_INTERNAL_URL=http://localhost:8090
+      - AUTH_INTERNAL_URL=http://localhost:8091
+      - UPSILON_API_URL=http://localhost:8081
+      - S2S_TOKEN=dev-internal-token
+      # Canonical front door (Caddy): the only entry point that routes both
+      # /api/v1/auth/* (to upsilonauth) and everything else (to the hub).
+      # `proxy` is the compose service name, resolvable from this `app`
+      # container — callers (e.g. upsiloncli) simply inherit this.
+      - UPSILON_BASE_URL=http://proxy:8085
     ports:
       - "5173:5173"
       - "8081:8081"

@@ -16,11 +16,13 @@ if ! ./scripts/check_services.sh; then
     exit 1
 fi
 
-# 2. Build CLI (ensure it exists)
+# 2. Build CLI (always rebuild: bin/ is git-ignored, a stale binary would
+#    silently test code that is not the working tree)
 CLI="./upsiloncli/bin/upsiloncli"
-if [ ! -f "$CLI" ]; then
-    echo "CLI binary not found. Building..."
-    cd upsiloncli && go build -o bin/upsiloncli cmd/upsiloncli/main.go && cd ..
+if ! CLI_BUILD_OUTPUT=$(cd upsiloncli && go build -o bin/upsiloncli cmd/upsiloncli/main.go 2>&1); then
+    echo "ERROR: Failed to build upsiloncli CLI:"
+    echo "$CLI_BUILD_OUTPUT"
+    exit 1
 fi
 
 # 3. Execution Setup
@@ -111,9 +113,10 @@ run_e2e_test() {
         paths="$paths $script"
     done
 
-    # Run the farm with --local flag
+    # Run the farm — the CLI inherits UPSILON_BASE_URL (the Caddy front door)
+    # from the environment/compose; no flag needed.
     local start_time=$SECONDS
-    if timeout 120 "$CLI" --local --farm -L "$LOG_DIR" $paths > /dev/null 2>&1; then
+    if timeout 120 "$CLI" --farm -L "$LOG_DIR" $paths > /dev/null 2>&1; then
         local duration=$((SECONDS - start_time))
         echo -e "\033[32m[PASSED]\033[0m in ${duration}s"
         PASSED_COUNT=$((PASSED_COUNT + 1))
