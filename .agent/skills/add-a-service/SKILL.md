@@ -29,6 +29,11 @@ doc, reviewed by a human):
 - **Sync or durable?** User-facing calls are synchronous RPC. Anything
   fired from a settlement/webhook/background path must be a durable River
   job on the caller side plus an idempotency key enforced by the callee.
+- **Does it store personal data?** If any table holds data attributable to
+  an account, the service owes a GDPR export fragment **and** a purge path
+  (§7) before it goes live. Answer this now, in writing — retrofitting
+  either one after the service is live is far more expensive than building
+  it in.
 
 ## 1. ATD governance (before any code)
 
@@ -177,6 +182,54 @@ front door · 8090 upsilonhub · 8091 upsilonauth · 8092 upsiloneconomy ·
 - Auth of end users is a single service's monopoly (identity/SSO): validate
   bearers via its introspection endpoint (with a short-TTL cache), never by
   reading its database directly.
+
+### GDPR: export fragment + purge path (mandatory if the service stores personal data)
+
+The identity/SSO service is the GDPR authority and owns the only public
+export route. It does not read your database — it composes fragments from
+the services that own the data. A service holding personal data owes **two**
+internal endpoints before go-live, both behind the same `X-Internal-Token`
+fence as every other internal route.
+
+**1. Export fragment — `GET /internal/v1/gdpr/export/{user_id}`**
+
+- Return a typed, versioned DTO carrying a `schema_version`, owned by the
+  service and published in the shared types module.
+- **Owner-scoped queries only.** The fragment holds that user's data and
+  nothing else — no other account's rows, no secrets, no credentials, no
+  third-party personal data.
+- **Never put the internal account UUID in anything that reaches the public
+  payload.** The UUID scopes the query; it is not export content.
+- Register the fragment with the authority's collector, or the aggregate
+  will not pick it up.
+
+The aggregate is **fail-closed**: it returns `200` only when every required
+fragment was obtained, because a `200` is a completeness claim in a legally
+significant document. A fragment that is unreachable or unimplemented fails
+the whole export with `503` — it never degrades to a silent partial success.
+An *empty* owned dataset is a successful empty fragment; an *absent* one is
+a failure. Get this distinction right in your handler.
+
+If a read path lazy-creates a row on access, the **export must not**: use a
+dedicated read-only query, and represent absence as `null` rather than a
+zero-valued object. A zero default is an affirmative false claim about
+retained data.
+
+**2. Purge path — an idempotent internal erasure endpoint**
+
+- Idempotency-keyed, so the caller can retry safely; return whether the
+  purge was applied or was a replay.
+- Preserve whatever audit trail the domain requires (e.g. zero a balance and
+  write a closing ledger row rather than deleting history outright).
+- **Wire the caller at the same time you write the endpoint.** An erasure
+  endpoint nothing invokes is indistinguishable from having no erasure at
+  all, and it fails silently: the account is already gone, so there is no
+  user-facing request left to reject. Erasure must be driven from the GDPR
+  authority over a durable job that retries and escalates to an operator if
+  it exhausts them — never dropped quietly.
+- Cover it with an end-to-end test that erases an account holding *non-empty*
+  data and asserts the effect in this service's database. A purge tested only
+  against an empty account proves nothing.
 
 ## 8. Wire into the local dev orchestration scripts
 

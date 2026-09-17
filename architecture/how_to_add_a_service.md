@@ -25,6 +25,9 @@ Before any repo exists, answer in writing (an update to `service_map.md` or an e
 - **Sync or durable?** User-facing calls are synchronous RPC. Anything fired from a
   settlement/webhook/background path must be a durable River job on the caller side plus an
   idempotency key enforced by the callee (see the award pipeline).
+- **Does it store personal data?** If any table holds data attributable to an account, the
+  service owes a GDPR export fragment (§7) and a purge path before it goes live. Answer this
+  now, in writing — retrofitting portability after cutover is exactly how ISS-118 happened.
 
 ## 1. ATD governance (before any code)
 
@@ -139,6 +142,28 @@ Port registry (extend it here when you claim one): 8081 upsilonapi · 8085 Caddy
 - The front door must never expose internal surfaces: Caddy `respond /internal/* 404`.
 - Auth of end users is upsilonauth's monopoly: validate bearers via its introspection
   endpoint (with a short-TTL cache), never by reading its database.
+
+### GDPR export fragment (mandatory if the service stores personal data)
+
+upsilonauth is the GDPR authority and owns the only public export route
+(`GET /api/v1/auth/export`). It does not read your database — it composes fragments. A
+service holding personal data MUST ship, before go-live:
+
+- `GET /internal/v1/gdpr/export/{user_id}`, behind the same `X-Internal-Token` fence as every
+  other internal route, returning a typed, versioned DTO (`schema_version`, e.g.
+  `battlev1.gdpr-export.v1`) owned by the service and published in `upsilontypes`.
+- **Owner-scoped queries only.** The fragment contains that user's data and nothing else —
+  no other account's rows, no secrets, no credentials, no third-party personal data.
+- **No internal account UUID in anything that reaches the public payload**
+  (`requirement_customer_user_id_privacy`): the UUID scopes the query, it is not export content.
+- Registration in auth's collector so the aggregate picks the fragment up.
+
+The aggregate is **fail-closed**: auth returns `200` only when every required fragment was
+obtained, because a `200` is a completeness claim in a legally significant document. A
+fragment that is unreachable or unimplemented fails the whole export with `503
+export_incomplete` — it never degrades to a silent partial success. An *empty* owned dataset
+is a successful empty fragment; an *absent* one is a failure. Get this distinction right in
+your handler.
 
 ## 8. CI & testing
 
