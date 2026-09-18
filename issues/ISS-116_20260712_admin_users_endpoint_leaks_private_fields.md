@@ -4,7 +4,7 @@
 **Ref:** `ISS-116`
 **Date:** 2026-07-12
 **Severity:** Medium
-**Status:** Open
+**Status:** Resolved
 **Component:** `upsilonhub/internal/gateway/resources.go` (`userJSON`/`newUserJSON`)
 **Affects:** `GET /api/v1/admin/users` (`admin.go:44`), `POST /api/v1/admin/users/{account_name}/anonymize` pre-anonymize response (`admin.go:90`); `upsiloncli/tests/scenarios/edge_admin_private_data_access.js` (EC-49, ISS-107 audit)
 

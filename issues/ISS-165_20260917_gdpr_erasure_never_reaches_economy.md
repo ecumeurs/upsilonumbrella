@@ -4,7 +4,7 @@
 **Ref:** `ISS-165`
 **Date:** 2026-09-17
 **Severity:** High
-**Status:** Open
+**Status:** Resolved
 **Component:** `upsilonauth/internal/identity` + `upsilonauth/internal/accountpush` (fan-out), `upsiloneconomy/internal/api` (orphaned purge endpoint)
 **Affects:** Every account that exercises its right to erasure; GDPR Art. 17 compliance
 

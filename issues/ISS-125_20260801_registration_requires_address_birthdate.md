@@ -4,7 +4,7 @@
 **Ref:** `ISS-125`
 **Date:** 2026-08-01
 **Severity:** Medium
-**Status:** Open
+**Status:** Resolved
 **Component:** `upsilonauth/internal/gateway/auth.go`, `upsilonbattleui/src/Pages/Auth/Register.vue`
 **Affects:** `upsilonauth/internal/identity/identity.go`, `upsilonbattleui/docs/ui_registration_minimal_form_fields.atom.md`
 
