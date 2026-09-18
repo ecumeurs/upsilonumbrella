@@ -114,6 +114,11 @@ services:
       # AccountPush producer (River job -> POST /internal/v1/players/:id/account)
       # needs the hub's internal S2S surface to relay account lifecycle mutations.
       - HUB_INTERNAL_URL=http://hub:8090
+      # Economy's internal S2S surface, required for three auth duties: the GDPR
+      # export collector (fail-closed without it), user-view composition, and the
+      # economy_purge consumer that closes an erased account's wallet (ISS-165).
+      # Unset, purge jobs park durably in Postgres and no erasure ever completes.
+      - ECONOMY_INTERNAL_URL=http://economy:8092
     env_file:
       - .env # APP_DEBUG, S2S_TOKEN
     depends_on:
