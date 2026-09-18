@@ -12,6 +12,7 @@ remains in git if ever needed.
 
 | Document | What it is |
 |---|---|
+| [account_lifecycle.md](account_lifecycle.md) | The full account lifecycle across the extracted platform — creation, opt-in service/game enrollment, the `account_push` read-model sync, GDPR export (resolved, ISS-118) and GDPR erasure (open gap, ISS-165) — with the stage → owning service → fires/consumes map. |
 | [architecture_anchor.md](architecture_anchor.md) | Current-state snapshot of the running system — the quick "what exists right now" anchor (cited by `.agent/rules/UPSILON.md`). |
 | [platform_architecture.md](platform_architecture.md) | The v3 platform architecture: the four-game trajectory, world rules, service topology and the decisions behind them. |
 | [service_map.md](service_map.md) | Canonical service → project ownership map, contract/vision attribution and the extraction status (cited by `CLAUDE.md` + `UPSILON.md`). |
