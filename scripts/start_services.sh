@@ -99,7 +99,10 @@ start_service "Upsilon Economy" "upsiloneconomy" "env DATABASE_URL=$ECONOMY_DB_U
 # schema; provision it (migrate + seed the well-known accounts) on every start.
 # HUB_INTERNAL_URL lets its AccountPush producer reach the hub's internal seam;
 # ECONOMY_INTERNAL_URL lets its GDPR export collector fan out to the economy
-# service (without it, export fail-closes and composition serves placeholders).
+# service (without it, export fail-closes and composition serves placeholders),
+# and selects the economy_purge worker so the erasure fan-out actually drains
+# (ISS-165); unset, purges park on their own durable queue (never consumed by
+# the account_push worker) and drain on a later boot that configures economy.
 echo "[+] Provisioning auth database (migrate + seed)..."
 ( cd upsilonauth \
     && env DATABASE_URL="$AUTH_DB_URL" ./bin/upsilonauth -migrate \
