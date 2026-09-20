@@ -89,6 +89,13 @@ Enforced by `scripts/code_health_check.py`; treat its errors as blocking.
 
 - **Docs move with code.** Any change to an API path/payload/behavior updates `communication.md`,
   Postman, and the ATD atom in the same change. Observability and contracts docs likewise.
+- **Documentation is self-sufficient — no external references.** No doc (in-code comment, README,
+  `communication.md`, ATD atom, architecture doc, anything under `.agent/`) may point a reader at
+  issues, failure reports, tickets, PRs, chat threads, or other out-of-band material to understand
+  it. A doc must stand on its own for whoever reads it next, without chasing a link that may be
+  stale, private, or gone. The only exception is a **hard link between parts of the same split
+  document** (an index linking to its subject files, a subject file linking back to its index) —
+  never a link out to a different kind of artifact.
 - Commit/push only when asked; branch off the default branch first. Binaries go to `bin/` (git-
   ignored), never committed.
 - **New features and major updates start in a new git worktree**, not the checked-out working

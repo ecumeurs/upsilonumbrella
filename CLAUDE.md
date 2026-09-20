@@ -12,7 +12,7 @@ The full standard is in [CODING_RULE.md](CODING_RULE.md); read it before writing
 4. **Strict API contract adherence** — honor the API/interface exactly; **no defaulting to "save the day"**; the envelope is a hard contract; cross-seam access only through the owning interface.
 5. **Test-first on bugs** — reproduce the error as a failing test at the nearest module *before* fixing it; no test-only branches in production code.
 6. **Zero-error code health** (`code_health_check.py`) — file ≤400/600 LOC, nesting ≤4, doc every function, 1–10 distinct ATD atoms/file.
-7. **Change discipline** — docs (`communication.md`, Postman, atoms) move with code; commit/push only when asked; binaries to `bin/`; **new features/major updates start in a new git worktree**, not the primary checkout.
+7. **Change discipline** — docs (`communication.md`, Postman, atoms) move with code; **every doc is self-sufficient, never pointing readers at issues/failure-reports/tickets/PRs** (only exception: hard links between parts of the same split doc, e.g. index ⇄ subject); commit/push only when asked; binaries to `bin/`; **new features/major updates start in a new git worktree**, not the primary checkout.
 
 ## 1. Project Map & Infrastructure ([UPSILON.md](.agent/rules/UPSILON.md))
 **MANDATORY READING FOR GROUNDING.** UPSILON.md holds the full "Who's Who", port mappings, workflows, and testing toolkit. The landscape, condensed so it's always in context:
