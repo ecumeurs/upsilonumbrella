@@ -4,7 +4,7 @@
 **Ref:** `ISS-137`
 **Date:** 2026-08-26
 **Severity:** Medium
-**Status:** Open
+**Status:** Resolved
 **Component:** `upsilonauth/internal/gateway/auth.go` (logout call site) / `upsilonauth/internal/identity/pg.go` (`RevokeToken`, `RenewToken`) / `upsilonauth/internal/identity/identity.go` (sliding-renewal window)
 **Affects:** any client that receives a renewed token via `meta.token`/`renewed_token` but logs out with the token id it originally held instead of adopting the replacement
 
@@ -154,10 +154,9 @@ Atoms: new `upsilonauth:mech_token_revocation_cascade` (the cascade logic), amen
 `upsilonauth:mech_sanctum_token_renewal` v2.1 (family inheritance on renewal), amended
 `upsilonapi:api_auth_logout` v1.1 (whole-family revocation is now the logout contract).
 
-This issue is kept **Open** rather than retired: the fix removes the data-layer gap, but the
-underlying lesson — clients must not be relied upon to propagate renewal correctly for security
-invariants to hold — is worth leaving visible until a maintainer decides this is fully closed out
-(e.g. once the fix has soaked and the atoms above have gone STABLE).
+This issue was kept Open rather than retired at first fix, pending verification against a real
+database — see the 2026-09-20 Change Log entry below for that verification and the resulting
+closure.
 
 ---
 
@@ -187,6 +186,19 @@ invariants to hold — is worth leaving visible until a maintainer decides this 
   behavior first). Added atom `upsilonauth:mech_token_revocation_cascade`; amended
   `upsilonauth:mech_sanctum_token_renewal` (v2.1) and `upsilonapi:api_auth_logout` (v1.1). Kept
   Status **Open** per maintainer direction pending soak/atom promotion, not retired.
+- **2026-09-20**: Verified against a real, non-testcontainer dev Postgres, not just unit tests.
+  Migration `000003_token_family` applied cleanly (`schema_migrations` at v3; `family_id` column
+  NOT NULL with its btree index; the two pre-existing rows backfilled with distinct uuids, not a
+  shared one). `go test -p 1 ./internal/identity/... ./internal/gateway/...` passed in full,
+  including both subtests of `TestIntrospectRevokeCascadesToRenewedFamily`. Exercised the actual
+  live flow through the running auth service behind Caddy: logged in, forced the request inside
+  the real 10-15 minute renewal window, confirmed `meta.message: "Token renewed"` and a fresh
+  `meta.token` on the response, then logged out using the OLD (pre-renewal, still-in-grace-window)
+  token id — a direct query afterward showed both the old and the new token rows deleted, i.e. the
+  exact scenario this issue described no longer leaves a live replacement. Down-migration
+  reversibility also confirmed (drops `family_id`+index cleanly; re-up restores both without
+  touching pre-existing row data). No bugs found in the committed fix. Commit `c764579`
+  (`upsilonauth`). Status set to **Resolved**.
 
 ---
 

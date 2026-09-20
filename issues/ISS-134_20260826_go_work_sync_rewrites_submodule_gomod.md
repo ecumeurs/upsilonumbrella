@@ -4,7 +4,7 @@
 **Ref:** `ISS-134`
 **Date:** 2026-08-26
 **Severity:** Medium
-**Status:** In Progress
+**Status:** Resolved
 **Component:** `go.work`
 **Affects:** `upsilonauth/go.mod`, `upsilonauth/go.sum`, `upsiloneconomy/go.mod`, `upsiloneconomy/go.sum`, `upsilonhub/go.mod`, `upsilonhub/go.sum`, `upsilontypes/go.mod`, `upsilontypes/go.sum`, `.github/workflows/ci.yml`, `scripts/run_ci_local.sh`
 
@@ -116,3 +116,4 @@ Honest scope limit — this issue reports an observed condition, not a proven fa
 ## Change Log
 
 - **2026-09-19**: Re-validated; confirmed still live and now affecting a fourth submodule, `upsilontypes` (see the re-validation note in Problem Scenario). Applied the short-term fix: ran `go work sync` once from the umbrella root; the reconciled `go.mod`/`go.sum` diffs in `upsilonauth`, `upsiloneconomy`, `upsilonhub`, and `upsilontypes` are left uncommitted in the working tree for review (per project rule, this agent does not commit). Verified with `go build`/`go vet` across the workspace (pre-existing, unrelated `upsilonauth/internal/economypurge` vet failure excluded — reproduced on unmodified `main` too) and real (non-`--check`) `docker build` runs of the `upsilonauth`, `upsiloneconomy`, and `upsilonhub` images, all of which succeeded. Applied the medium-term fix: added a "Verify Sync Left Tree Clean" guard step immediately after both `go work sync` steps in `.github/workflows/ci.yml`, and an equivalent `verify_sync_clean` check after both `go work sync` calls in `scripts/run_ci_local.sh`; both check the umbrella's own `go.work`/`go.work.sum` plus `git submodule foreach` over each submodule's `go.mod`/`go.sum`, and fail loudly (`die`/`exit 1` with a remediation message) rather than warn. Guard tested both ways locally (dirty tree fails naming the affected submodules; tree cleaned via `git stash` passes) before the fix diffs were restored. Long-term fix (Dockerfiles building against the umbrella workspace) remains undone, as scoped. Status set to `In Progress` pending user review/commit of the manifest diffs.
+- **2026-09-20**: User reviewed and authorized commit. Reconciled manifests committed per-submodule (`upsiloneconomy` `eb2af6c`, `upsilonhub` `f6559ac`, `upsilontypes` `0e4601f`, plus `upsilonauth`'s manifest reconciliation folded into the ISS-137 fix commit `c764579`); the CI drift guard committed at umbrella `e363928`. Short and medium-term fixes are both now in the tree and verified starting from a clean, guarded state. Status set to **Resolved**. Long-term fix (Dockerfiles building against the umbrella workspace) is intentionally out of scope here — left as a candidate for a future issue if the dual-resolution risk (point 2 above) is ever observed to actually diverge.
