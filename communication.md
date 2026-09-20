@@ -61,7 +61,7 @@ To ensure consistency and optimize performance during high-frequency combat, Ups
 ## 2. Upsilon Hub (External Gateway)
 **Source Module:** [[api_laravel_gateway]]  
 **Base URL:** `http://localhost:8085/api/v1` (front door; hub-direct on `:8090`)  
-**Authentication:** Bearer Token (opaque personal access tokens, Sanctum-compatible rows; sliding renewal per [[upsilonbattle:mech_sanctum_token_renewal]])
+**Authentication:** Bearer Token (opaque personal access tokens, Sanctum-compatible rows; sliding renewal per [[upsilonauth:mech_sanctum_token_renewal]])
 
 ### 2.0 API Summary
 

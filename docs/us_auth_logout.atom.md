@@ -12,6 +12,7 @@ parents:
   - [[upsilonbattleui:req_player_experience]]
 dependents:
   - [[uc_auth_logout]]
+  - [[upsilonauth:mech_token_revocation_cascade]]
 ---
 
 # Secure Logout User Story
