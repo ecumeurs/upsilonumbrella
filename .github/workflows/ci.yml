@@ -35,6 +35,25 @@ jobs:
       - name: Sync Workspace
         run: go work sync
 
+      - name: Verify Sync Left Tree Clean
+        # ISS-134: `go work sync` silently rewrites each member module's own
+        # go.mod/go.sum to match the workspace's resolved versions. If the
+        # committed manifests already matched, this step is a no-op; if they
+        # drifted, it means someone changed a dependency without re-running
+        # `go work sync` and committing the result. The umbrella repo is a
+        # submodule checkout — a bare `git diff` at its root does not see
+        # into submodule working trees, so both scopes are checked.
+        run: |
+          if ! git diff --exit-code -- go.work go.work.sum; then
+            echo "::error::go work sync modified the umbrella's go.work/go.work.sum. Run 'go work sync' locally and commit the reconciled files."
+            exit 1
+          fi
+          dirty="$(git submodule foreach --quiet 'git diff --quiet -- go.mod go.sum || echo "$name"')"
+          if [ -n "$dirty" ]; then
+            echo "::error::go work sync left uncommitted go.mod/go.sum drift in: $dirty. Run 'go work sync' locally, review the diff in each affected submodule, and commit the reconciled go.mod/go.sum there."
+            exit 1
+          fi
+
       - name: Go Vet (Modules Derived From go.work)
         # Module list is derived from go.work (see scripts/list_go_modules.sh)
         # instead of hand-maintained here — this list drifted twice when
@@ -107,6 +126,22 @@ jobs:
 
       - name: Sync Workspace
         run: go work sync
+
+      - name: Verify Sync Left Tree Clean
+        # ISS-134: see the identical guard in the build job. Duplicated here
+        # (rather than shared) because this job runs in its own fresh
+        # checkout and go-tests must not silently run against drifted
+        # manifests either.
+        run: |
+          if ! git diff --exit-code -- go.work go.work.sum; then
+            echo "::error::go work sync modified the umbrella's go.work/go.work.sum. Run 'go work sync' locally and commit the reconciled files."
+            exit 1
+          fi
+          dirty="$(git submodule foreach --quiet 'git diff --quiet -- go.mod go.sum || echo "$name"')"
+          if [ -n "$dirty" ]; then
+            echo "::error::go work sync left uncommitted go.mod/go.sum drift in: $dirty. Run 'go work sync' locally, review the diff in each affected submodule, and commit the reconciled go.mod/go.sum there."
+            exit 1
+          fi
 
       - name: Run Go Tests (Modules Derived From go.work)
         # Module list is derived from go.work (see scripts/list_go_modules.sh)

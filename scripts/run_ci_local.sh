@@ -77,6 +77,26 @@ die()   { err "$*"; exit 1; }
 usage() { awk 'NR>1 && /^#/ {sub(/^# ?/,""); print; next} NR>1 {exit}' "${BASH_SOURCE[0]}"; exit "${1:-0}"; }
 
 # ----------------------------------------------------------------------------
+# ISS-134: `go work sync` silently rewrites each member module's own
+# go.mod/go.sum to match the workspace's resolved versions. If the committed
+# manifests already matched, this is a no-op; if they drifted, it means a
+# dependency changed without `go work sync` being re-run and its result
+# committed. TARGET_DIR is a submodule checkout — a bare `git diff` at its
+# root does not see into submodule working trees, so both scopes are checked.
+# ----------------------------------------------------------------------------
+verify_sync_clean() {
+    cd "$TARGET_DIR"
+    if ! git diff --exit-code -- go.work go.work.sum > /dev/null; then
+        die "go work sync modified $TARGET_DIR/go.work or go.work.sum. Run 'go work sync' locally and commit the reconciled files."
+    fi
+    local dirty
+    dirty="$(git submodule foreach --quiet 'git diff --quiet -- go.mod go.sum || echo "$name"')"
+    if [ -n "$dirty" ]; then
+        die "go work sync left uncommitted go.mod/go.sum drift in: $dirty. Run 'go work sync' locally, review the diff in each affected submodule, and commit the reconciled go.mod/go.sum there."
+    fi
+}
+
+# ----------------------------------------------------------------------------
 # Parse arguments
 # ----------------------------------------------------------------------------
 while [ $# -gt 0 ]; do
@@ -216,6 +236,7 @@ stage_build() {
 
     info "go work sync"
     go work sync
+    verify_sync_clean
 
     info "go vet (modules derived from go.work)"
     go vet $(scripts/list_go_modules.sh)
@@ -264,6 +285,7 @@ stage_unit() {
 
     info "Go unit tests (modules derived from go.work)"
     go work sync
+    verify_sync_clean
     # Split into two invocations: upsilonauth/upsiloneconomy each start
     # several testcontainers Postgres instances, joining upsilonhub's own
     # two for 8 container-backed packages total. At default parallelism

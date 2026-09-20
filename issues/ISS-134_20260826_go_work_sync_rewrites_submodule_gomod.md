@@ -4,9 +4,9 @@
 **Ref:** `ISS-134`
 **Date:** 2026-08-26
 **Severity:** Medium
-**Status:** Open
+**Status:** In Progress
 **Component:** `go.work`
-**Affects:** `upsilonauth/go.mod`, `upsilonauth/go.sum`, `upsiloneconomy/go.mod`, `upsiloneconomy/go.sum`, `upsilonhub/go.mod`, `upsilonhub/go.sum`, `.github/workflows/ci.yml`, `scripts/run_ci_local.sh`
+**Affects:** `upsilonauth/go.mod`, `upsilonauth/go.sum`, `upsiloneconomy/go.mod`, `upsiloneconomy/go.sum`, `upsilonhub/go.mod`, `upsilonhub/go.sum`, `upsilontypes/go.mod`, `upsilontypes/go.sum`, `.github/workflows/ci.yml`, `scripts/run_ci_local.sh`
 
 ---
 
@@ -50,6 +50,19 @@ upsilonhub   go.mod | 9 +++++++++   go.sum | 12 ++++++++++
 
 `upsilonapi` and `upsilonplatform` are unaffected (0 dirty), so this is specific to the three services, not a workspace-wide condition.
 
+**2026-09-19 re-validation:** Re-ran `go work sync` from a clean tree (0 dirty across all 13 submodules beforehand). The three original diffs reproduce verbatim — `upsilonauth`'s `river` indirect→direct promotion, and `upsiloneconomy`'s go.sum -36 — and a fourth submodule is now also affected:
+
+```
+upsilontypes   go.mod | 3 +++   go.sum | 5 ++++-
+  + github.com/kr/pretty v0.3.1            // indirect
+  + github.com/rogpeppe/go-internal v1.14.1 // indirect
+  (go.sum: +4/-1 — adds github.com/kr/pretty, github.com/kr/text,
+   github.com/rogpeppe/go-internal, and bumps gopkg.in/check.v1 from
+   v0.0.0-20161208181325 to v1.0.0-20201130134442)
+```
+
+This affects `upsilontypes`, so the drift is now 4 of 13 submodules, not 3. Fix applied per the Recommended Fix below; see Change Log.
+
 The `river` promotion is the clearest signal: `upsilonhub` runs the durable credit-award worker on River (`upsilonhub/internal/awards/`), and `upsilonauth` uses River migrations in its test harness — yet neither `go.mod` declares River as a direct requirement. It resolves today only transitively, via `upsilonplatform`'s `jobs` package.
 
 ### Why It Matters
@@ -91,9 +104,15 @@ Honest scope limit — this issue reports an observed condition, not a proven fa
 
 ## References
 
-- `.github/workflows/ci.yml:35,105` (the `go work sync` steps)
-- `scripts/run_ci_local.sh` (`stage_build`, `stage_unit`)
+- `.github/workflows/ci.yml:36,109` (the `go work sync` steps; step headers at `:35` and `:108`) — corrected 2026-09-19, was `:35,105`
+- `scripts/run_ci_local.sh:218,266` (`stage_build`, `stage_unit`) — corrected 2026-09-19, line numbers added
 - `upsilonauth/Dockerfile:18-26`, `upsiloneconomy/Dockerfile:19-27`, `upsilonhub/Dockerfile:25-44`
 - `upsilonhub/internal/awards/` (River consumer), `upsilonplatform/jobs`
 - Discovered during: ISS-132 (resolved; file removed 2026-08-27)
 - Related: [ISS-123](ISS-123_20260724_host_side_ci_seed_scripts_superseded.md) — the same extraction produced host-script drift
+
+---
+
+## Change Log
+
+- **2026-09-19**: Re-validated; confirmed still live and now affecting a fourth submodule, `upsilontypes` (see the re-validation note in Problem Scenario). Applied the short-term fix: ran `go work sync` once from the umbrella root; the reconciled `go.mod`/`go.sum` diffs in `upsilonauth`, `upsiloneconomy`, `upsilonhub`, and `upsilontypes` are left uncommitted in the working tree for review (per project rule, this agent does not commit). Verified with `go build`/`go vet` across the workspace (pre-existing, unrelated `upsilonauth/internal/economypurge` vet failure excluded — reproduced on unmodified `main` too) and real (non-`--check`) `docker build` runs of the `upsilonauth`, `upsiloneconomy`, and `upsilonhub` images, all of which succeeded. Applied the medium-term fix: added a "Verify Sync Left Tree Clean" guard step immediately after both `go work sync` steps in `.github/workflows/ci.yml`, and an equivalent `verify_sync_clean` check after both `go work sync` calls in `scripts/run_ci_local.sh`; both check the umbrella's own `go.work`/`go.work.sum` plus `git submodule foreach` over each submodule's `go.mod`/`go.sum`, and fail loudly (`die`/`exit 1` with a remediation message) rather than warn. Guard tested both ways locally (dirty tree fails naming the affected submodules; tree cleaned via `git stash` passes) before the fix diffs were restored. Long-term fix (Dockerfiles building against the umbrella workspace) remains undone, as scoped. Status set to `In Progress` pending user review/commit of the manifest diffs.
